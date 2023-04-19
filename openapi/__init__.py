@@ -199,13 +199,17 @@ def register_swagger_path_parameter(model):
     return model
  
  
-def swagger_api(path="", method="", parameters={}, request_body=None, response=None, security=[]):
+def swagger_api(path="", method="", parameters={}, request_body=None, response=None, tags=[], summary="", description="", security=[]):
     if isinstance(path, str) and path != '':
         if _Swagger.paths.get(path, None):
             raise ValueError("Path is existed.")
-    summary = path.split('/')[-1]
+        
+    if not summary:
+        summary = path.split('/')[-1]
 
-    default = {method: {"summary":"{} {}".format(method, summary),
+    default = {method: {"tags": tags,
+                        "summary":"{} {}".format(method, summary),
+                        "description": description,
                         "responses": {
                             '200': {"description": "OK"}
                         },
@@ -230,6 +234,15 @@ def swagger_api(path="", method="", parameters={}, request_body=None, response=N
             if isinstance(api, dict):
                 if security:
                     api['security'] = security
+                if tags:
+                    api['tags'] = tags
+                if parameters:
+                    for p in parameters:
+                        api.get('parameters',[]).append(parameters[p])
+                if request_body:
+                    api['requestBody'] = request_body
+                if response:
+                    api['responses'] = response
                 _Swagger.paths[path] = {method: api}
             else:
                 _Swagger.paths[path] = default
