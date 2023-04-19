@@ -52,6 +52,16 @@ def build_swagger_docs(endpoint_doc):
     endpoint_doc = _extract_swagger_definition(endpoint_doc)
     try:
         endpoint_doc = endpoint_doc.replace("\t", "    ")  # fix windows tabs bug
+        if endpoint_doc.strip() == '':
+            return {"tags": [],
+                    "summary":"",
+                    "description": "",
+                    "responses": {
+                        '200': {"description": "OK"}
+                    },
+                    "parameters": [],
+                    "security":[]
+                    }
         end_point_swagger_doc = yaml.safe_load(endpoint_doc)
         if not isinstance(end_point_swagger_doc, dict):
             raise yaml.YAMLError()
@@ -207,7 +217,7 @@ def swagger_api(path="", method="", parameters={}, request_body=None, response=N
     if not summary:
         summary = path.split('/')[-1]
 
-    default = {method: {"tags": tags,
+    default = {method: {
                         "summary":"{} {}".format(method, summary),
                         "description": description,
                         "responses": {
@@ -217,6 +227,8 @@ def swagger_api(path="", method="", parameters={}, request_body=None, response=N
                         "security":security
                     }
                 }
+    if tags:
+        default[method]['tags'] = tags
     if response:
         default[method]['responses'] = response
 
