@@ -210,7 +210,7 @@ def register_swagger_path_parameter(model):
  
  
 def swagger_api(path="", method="", parameters={}, request_body=None, response=None, tags=[], summary="", description="", security=[]):
-    if isinstance(path, str) and path != '':
+    if type(path) == str and path != '':
         if _Swagger.paths.get(path, None):
             raise ValueError("Path is existed.")
         
@@ -243,7 +243,7 @@ def swagger_api(path="", method="", parameters={}, request_body=None, response=N
         doc = inspect.getdoc(func)
         if doc:
             api = build_swagger_docs(doc)
-            if isinstance(api, dict):
+            if type(api) == dict:
                 if security:
                     api['security'] = security
                 if tags:

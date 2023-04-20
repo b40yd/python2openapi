@@ -6,7 +6,7 @@ class SchemaBaseModel(object):
     def __to_dict__(self, lst):
             rst = []
             for value in lst:
-                if isinstance(value, list):
+                if type(value) == list:
                     rst.append([self.__to_dict__(v) for v in value])
                 elif isinstance(value, SchemaBaseModel):
                     rst.append(value.to_dict())
@@ -25,7 +25,7 @@ class SchemaBaseModel(object):
                 continue
             if not attr.startswith('_'):
                 value = getattr(self, attr)
-                if isinstance(value, list):
+                if type(value) == list:
                     value = self.__to_dict__(value)
                 elif isinstance(value, SchemaBaseModel):
                     value = value.to_dict(only, remove)
@@ -71,7 +71,7 @@ class IntField(Field):
         self.format = format
 
     def validate(self, name, value):
-        if not isinstance(value, int):
+        if type(value) != int:
             raise ValueError("{} should be integer type".format(name))
         
         if self.min_value is not None and self.min_value > value:
@@ -95,7 +95,7 @@ class FloatField(Field):
         self.enums = enums
 
     def validate(self, name, value):
-        if not isinstance(value, float):
+        if type(value) != float:
             raise ValueError("{} should be float type".format(name))
         
         if self.min_value is not None and self.min_value > value:
@@ -115,7 +115,7 @@ class BoolField(Field):
         self.description = description
 
     def validate(self, name, value):
-        if not isinstance(value, bool):
+        if type(value) != bool:
             raise ValueError("{} should be bool type".format(name))
         return value
     
@@ -133,10 +133,10 @@ class StringField(Field):
 
     def validate(self, name, value):
         if sys.version_info.major == 2:
-            if not isinstance(value, (str,unicode)):
+            if not type(value) in (str,unicode):
                 raise ValueError("{} should be string type".format(name))
         else:
-            if not isinstance(value, str):
+            if type(value) != str:
                     raise ValueError("{} should be string type".format(name))
         
         length = len(value)
@@ -169,7 +169,7 @@ class ListField(Field):
         self.description = description
 
     def validate(self, name, value):
-        if not isinstance(value, list):
+        if type(value) != list:
             raise ValueError("{} should be list type".format(name))
         
         if self.min_items is not None and len(value) < self.min_items:

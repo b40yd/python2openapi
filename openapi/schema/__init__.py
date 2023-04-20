@@ -21,7 +21,7 @@ def schema_model(cls):
         __module__ = cls.__module__
         def __init__(self, params={}, enable_default=False,**kwags):
             required_diff = []
-            if params and not isinstance(params, dict):
+            if params and type(params) != dict:
                 raise ValueError("params should be <class 'dict'>.")
             for field_name, field_type in validate_props.items():
                 value = kwags.get(field_name, None)
