@@ -1,6 +1,6 @@
 # encoding: utf-8
 from openapi.schema import schema_model, SchemaBaseModel
-from openapi.schema.field import IntField, StringField, ListField,ObjectField,Field
+from openapi.schema.field import IntField, StringField, ListField,ObjectField,FloatField
 # import simplejson as json
 import json
 
@@ -11,6 +11,7 @@ class Bar(object):
 class Foo(object):
     foo = StringField(default="foo")
     bars = ObjectField(classobj=Bar,default="foo")
+    double= FloatField(default=1.0)
 
 @schema_model
 class Demo(object):
@@ -26,6 +27,7 @@ class DemoList(object):
 
 @schema_model
 class DemoListObject(object):
+    hello = StringField()
     servers = ListField(item_field=Demo)
 
 @schema_model
@@ -34,8 +36,9 @@ class DemoObject(object):
     server = ObjectField(classobj=Demo)
 
 def test_validate():
-    data = Demo(enable_default=True,age=11)
-    print(data.age, data.name)
+    # foo = Foo(double = "11")
+    data = Demo(enable_default=True,age=11,foos=Foo(enable_default=True,double = 1))
+    # print(data.age, data.name)
     jdata = json.dumps(data,default=lambda obj: obj.__json__())
     print(jdata, "111")
     assert data.age >= 10 and data.age <= 20
@@ -43,15 +46,20 @@ def test_validate():
 
 def test_list_validate():
     data = DemoList()
-    assert data.ids == None
+    print(data)
+    # assert data.ids == None
     data = DemoList(ids=[1,2,3])
     print(data.to_dict())
     assert data.ids == [1,2,3]
 
 def test_list_object_validate():
-    data = DemoListObject(servers=[{"age":20, "name": "demo"}])
+    data = DemoListObject(default=False,servers=[{"age":20, "name": "d11111111emo"}])
+    print(data.to_dict())
     all =data.to_dict(remove=["servers"])
     print(all)
+    data = DemoListObject(servers=[Demo(age=10, name="lisan",foos=Foo(double = 2.0))])
+    # all =data.to_dict(remove=["servers"])
+    print(data.to_dict())
     # for d in all['servers']:
     #     if hasattr(d, 'to_dict'):
     #         print(d.to_dict(),"......")

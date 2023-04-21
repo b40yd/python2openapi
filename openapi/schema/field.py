@@ -14,7 +14,7 @@ class SchemaBaseModel(object):
                     rst.append(value)
             return rst
 
-    def to_dict(self,only=[],remove=[]):
+    def to_dict(self, only=[], remove=[]):
         _dict = {}
         last_only = set(only).difference(set(remove))
         last_remove = set(remove).difference(set(only))
@@ -27,7 +27,7 @@ class SchemaBaseModel(object):
                 value = getattr(self, attr)
                 if type(value) == list:
                     value = self.__to_dict__(value)
-                elif isinstance(value, SchemaBaseModel):
+                if isinstance(value, SchemaBaseModel):
                     value = value.to_dict(only, remove)
                 _dict[attr] = value
         return _dict
@@ -57,7 +57,17 @@ class Field():
     
     @abstractmethod
     def validate(self, name, value):
-        pass
+        return value
+
+class AnyField(Field):
+    def __init__(self, name=None, description="", default=None, required=False):
+        self.default = default
+        self.name = name
+        self.required = required
+        self.description = description
+    
+    def validate(self, name, value):
+        return super().validate(name, value)
 
 class IntField(Field):
     def __init__(self, name=None, description="", default=0, required=False, min_value=None, max_value=None, format="", enums=[]):
@@ -95,7 +105,12 @@ class FloatField(Field):
         self.enums = enums
 
     def validate(self, name, value):
-        if type(value) != float:
+        if sys.version_info.major == 2:
+            condition = type(value) != float and type(value) != int and type(value) != long
+        else:
+            condition = type(value) != float and type(value) != int 
+
+        if condition:
             raise ValueError("{} should be float type".format(name))
         
         if self.min_value is not None and self.min_value > value:
@@ -184,7 +199,10 @@ class ListField(Field):
                 if isinstance(self.item_field, Field):
                     values.append(self.item_field.validate(name,v))
                 elif issubclass(self.item_field, SchemaBaseModel):
-                    values.append(self.item_field(**v))
+                    if isinstance(v, SchemaBaseModel):
+                        values.append(v)
+                    else:
+                        values.append(self.item_field(**v))
                 elif issubclass(self.item_field, Field):
                     values.append(self.item_field().validate(name, v))
                 else:
@@ -204,6 +222,8 @@ class ObjectField(Field):
 
     def validate(self, name, value):
         if issubclass(self.classobj, SchemaBaseModel):
+            if isinstance(value, SchemaBaseModel):
+                return value
             return self.classobj(**value)
         else:
             raise ValueError("{} should be <SchemaModel> type".format(name))

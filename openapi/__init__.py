@@ -1,9 +1,19 @@
 import yaml
 import inspect
 from functools import wraps
-from openapi.schema.field import IntField,BoolField,FloatField,ListField,ObjectField,StringField,SchemaBaseModel
+from openapi.schema.field import (
+    IntField,
+    BoolField,
+    FloatField,
+    ListField,
+    ObjectField,
+    StringField,
+    SchemaBaseModel,
+)
+
 OPEN_API_VERSION = "3.0.0"
 SWAGGER_DOC_SEPARATOR = "---"
+
 
 class _Swagger(object):
     paths = {}
@@ -11,7 +21,10 @@ class _Swagger(object):
     parameters = {}
     global_tags = []
 
-def swagger_setup(title="", servers=[], version="", description="", term="", contact={}, tags=[]):
+
+def swagger_setup(
+    title="", servers=[], version="", description="", term="", contact={}, tags=[]
+):
     """
     openapi: 3.0
     """
@@ -23,15 +36,15 @@ def swagger_setup(title="", servers=[], version="", description="", term="", con
             "version": version,
             "description": description,
             "termsOfService": term,
-            "contact": contact
+            "contact": contact,
         },
         "servers": servers,
         "paths": _Swagger.paths,
         "components": {
-                "schemas": _Swagger.models,
-                "parameters": _Swagger.parameters,
-            },
-        "tags": _Swagger.global_tags
+            "schemas": _Swagger.models,
+            "parameters": _Swagger.parameters,
+        },
+        "tags": _Swagger.global_tags,
     }
 
 
@@ -52,16 +65,15 @@ def build_swagger_docs(endpoint_doc):
     endpoint_doc = _extract_swagger_definition(endpoint_doc)
     try:
         endpoint_doc = endpoint_doc.replace("\t", "    ")  # fix windows tabs bug
-        if endpoint_doc.strip() == '':
-            return {"tags": [],
-                    "summary":"",
-                    "description": "",
-                    "responses": {
-                        '200': {"description": "OK"}
-                    },
-                    "parameters": [],
-                    "security":[]
-                    }
+        if endpoint_doc.strip() == "":
+            return {
+                "tags": [],
+                "summary": "",
+                "description": "",
+                "responses": {"200": {"description": "OK"}},
+                "parameters": [],
+                "security": [],
+            }
         end_point_swagger_doc = yaml.safe_load(endpoint_doc)
         if not isinstance(end_point_swagger_doc, dict):
             raise yaml.YAMLError()
@@ -71,7 +83,8 @@ def build_swagger_docs(endpoint_doc):
             "description": "Swagger document could not be loaded from docstring",
             "tags": ["Invalid Swagger"],
         }
-    
+
+
 def _parser_parameter(field):
     schema = {}
     if isinstance(field, ListField):
@@ -114,7 +127,7 @@ def _parser_parameter(field):
         if field.min_value:
             schema["minimum"] = field.min_value
         if field.max_value:
-            schema["maximum"] = field.max_value 
+            schema["maximum"] = field.max_value
 
     if isinstance(field, (IntField, StringField, FloatField)):
         if field.format:
@@ -125,44 +138,57 @@ def _parser_parameter(field):
         return schema
     return schema
 
+
 def _gen_model_doc(model):
-    default = {"type": "object","properties": {}}
+    default = {"type": "object", "properties": {}}
     items = dict()
-    
+
     if isinstance(model, SchemaBaseModel) or issubclass(model, SchemaBaseModel):
         items = model.get_validate_func_map().items()
     else:
         items = vars(model).items()
     for field_name, field_type in items:
-        if not field_name.startswith('__'):
+        if not field_name.startswith("__"):
             alisa_name = field_type.name
             if alisa_name:
                 field_name = alisa_name
-            
+
             if model.__doc__:
                 default["description"] = model.__doc__
             default["properties"][field_name] = _parser_parameter(field_type)
     return default
 
+
 def gen_model_doc(model):
     default = {"type": "array"}
     if isinstance(model, ListField):
-       default["items"] = _gen_model_doc(model.item_field)
+        default["items"] = _gen_model_doc(model.item_field)
     else:
         default = _gen_model_doc(model)
     return default
 
-def gen_request_body(model,content_type="application/json"):
-    return {"description":model.__doc__ if model.__doc__ else '',"content":{content_type:{"schema":gen_model_doc(model)}}}
+
+def gen_request_body(model, content_type="application/json"):
+    return {
+        "description": model.__doc__ if model.__doc__ else "",
+        "content": {content_type: {"schema": gen_model_doc(model)}},
+    }
+
 
 def gen_response(model, status=200, content_type="application/json"):
-    return {str(status): {"description": model.__doc__ if model.__doc__ else '',
-                          "content":{content_type:{"schema":gen_model_doc(model)}}}}
+    return {
+        str(status): {
+            "description": model.__doc__ if model.__doc__ else "",
+            "content": {content_type: {"schema": gen_model_doc(model)}},
+        }
+    }
+
 
 def register_swagger_object_model(model):
     """Register model definition in swagger"""
     _Swagger.models[model.__name__] = gen_model_doc(model)
     return model
+
 
 def gen_parameter_doc(model, in_pos):
     items = dict()
@@ -172,13 +198,13 @@ def gen_parameter_doc(model, in_pos):
     else:
         items = vars(model).items()
     for field_name, field_type in items:
-        if not field_name.startswith('__'):
+        if not field_name.startswith("__"):
             default = {
                 "in": in_pos,
                 "description": field_type.description,
                 "required": field_type.required,
             }
-            
+
             alisa_name = field_type.name
             if alisa_name:
                 default["name"] = alisa_name
@@ -188,80 +214,96 @@ def gen_parameter_doc(model, in_pos):
             parameters[default["name"]] = default
     return parameters
 
+
 def register_swagger_query_parameter(model):
     """Register parameter definition in swagger"""
     _Swagger.parameters = gen_parameter_doc(model, "query")
     return model
+
 
 def register_swagger_header_parameter(model):
     """Register parameter definition in swagger"""
     _Swagger.parameters = gen_parameter_doc(model, "header")
     return model
 
+
 def register_swagger_cookie_parameter(model):
     """Register parameter definition in swagger"""
     _Swagger.parameters = gen_parameter_doc(model, "cookie")
     return model
 
+
 def register_swagger_path_parameter(model):
     """Register parameter definition in swagger"""
     _Swagger.parameters = gen_parameter_doc(model, "path")
     return model
- 
- 
-def swagger_api(path="", method="", parameters={}, request_body=None, response=None, tags=[], summary="", description="", security=[]):
-    if type(path) == str and path != '':
+
+
+def swagger_api(
+    path="",
+    method="",
+    parameters={},
+    request_body=None,
+    response=None,
+    tags=[],
+    summary="",
+    description="",
+    security=[],
+):
+    if type(path) == str and path != "":
         if _Swagger.paths.get(path, None):
             raise ValueError("Path is existed.")
-        
-    if not summary:
-        summary = path.split('/')[-1]
 
-    default = {method: {
-                        "summary":"{} {}".format(method, summary),
-                        "description": description,
-                        "responses": {
-                            '200': {"description": "OK"}
-                        },
-                        "parameters": [],
-                        "security":security
-                    }
-                }
+    if not summary:
+        summary = path.split("/")[-1]
+
+    default = {
+        method: {
+            "summary": "{} {}".format(method, summary),
+            "description": description,
+            "responses": {"200": {"description": "OK"}},
+            "parameters": [],
+            "security": security,
+        }
+    }
     if tags:
-        default[method]['tags'] = tags
+        default[method]["tags"] = tags
     if response:
-        default[method]['responses'] = response
+        default[method]["responses"] = response
 
     if parameters:
         for p in parameters:
-            default[method]['parameters'].append(parameters[p])
+            default[method]["parameters"].append(parameters[p])
 
     if request_body:
-        default[method]['requestBody'] = request_body
-    
+        default[method]["requestBody"] = request_body
+
     def bind(func):
         doc = inspect.getdoc(func)
         if doc:
             api = build_swagger_docs(doc)
             if type(api) == dict:
                 if security:
-                    api['security'] = security
+                    api["security"] = security
                 if tags:
-                    api['tags'] = tags
+                    api["tags"] = tags
                 if parameters:
                     for p in parameters:
-                        api.get('parameters',[]).append(parameters[p])
+                        api.get("parameters", []).append(parameters[p])
                 if request_body:
-                    api['requestBody'] = request_body
+                    api["requestBody"] = request_body
                 if response:
-                    api['responses'] = response
+                    api["responses"] = response
                 _Swagger.paths[path] = {method: api}
             else:
                 _Swagger.paths[path] = default
         else:
             _Swagger.paths[path] = default
+
         @wraps(func)
         def api_wraps(*argc, **kwags):
             return func(*argc, **kwags)
+
         return api_wraps
+
     return bind

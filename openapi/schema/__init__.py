@@ -19,7 +19,7 @@ def schema_model(cls):
         __doc__ = cls.__doc__
         __name__ = cls.__name__
         __module__ = cls.__module__
-        def __init__(self, params={}, enable_default=False,**kwags):
+        def __init__(self, params={}, default=True, **kwags):
             required_diff = []
             if params and type(params) != dict:
                 raise ValueError("params should be <class 'dict'>.")
@@ -32,14 +32,14 @@ def schema_model(cls):
                         required_diff.append(field_name)
                     self.__dict__[field_name] = field_type.validate("<{}.{}>".format(cls.__name__,field_name),value)
                 else:
-                    if enable_default:
+                    if default:
                         self.__dict__[field_name] = field_type.get_default()
                     else:
                         self.__dict__[field_name] = None
                     
             for field_name in set(required_props.keys()).difference(set(required_diff)):
                 validate_props[field_name].required_missing(field_name)
-
+         
         @classmethod
         def get_validate_func_map(self):
             return validate_props
