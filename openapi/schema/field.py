@@ -201,3 +201,40 @@ class ObjectField(Field):
         else:
             raise ValueError("{} should be <SchemaModel> type".format(name))
         
+class AnyOfField(Field):
+    def __init__(self,fields, name=None, description="", default=None,required=False):
+        self.default = default
+        self.name = name
+        self.required = required
+        self.fields = fields
+        self.description = description
+
+    def validate(self, name, value):
+        error = ValueError("{} should be any of <SchemaModel> or <Field> type. Error: {}".format(name, e))
+        for filed in self.fields:
+            try:
+                if isinstance(filed, Field):
+                    return filed.validate(name, value)
+                else:
+                    raise error
+            except ValueError as e:
+                raise error
+            
+class AllOfField(Field):
+    def __init__(self,fields, name=None, description="", default=None,required=False):
+        self.default = default
+        self.name = name
+        self.required = required
+        self.fields = fields
+        self.description = description
+
+    def validate(self, name, value):
+        error = ValueError("{} should be all of <SchemaModel> or <Field> type. Error: {}".format(name, e))
+        for filed in self.fields:
+            try:
+                if isinstance(filed, Field):
+                    filed.validate(name, value)
+                else:
+                    raise error
+            except ValueError as e:
+                raise error
