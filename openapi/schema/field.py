@@ -168,21 +168,17 @@ class ListField(Field):
 
         values = []
         for v in value:
-            try:
-                if isinstance(self.item_field, Field):
-                    values.append(self.item_field.validate(name,v))
-                elif issubclass(self.item_field, SchemaBaseModel):
-                    if isinstance(v, SchemaBaseModel):
-                        values.append(v)
-                    else:
-                        values.append(self.item_field(**v))
-                elif issubclass(self.item_field, Field):
-                    values.append(self.item_field().validate(name, v))
+            if isinstance(self.item_field, Field):
+                values.append(self.item_field.validate(name,v))
+            elif issubclass(self.item_field, SchemaBaseModel):
+                if isinstance(v, self.item_field):
+                    values.append(v)
                 else:
-                    raise ValueError("is {} unspport type.".format(name, type(v)))
-            except ValueError as e:
-                raise ValueError("The {} list {}".format(name, e))
-        
+                    raise ValueError("The {} should be <{}> type.".format(name, self.item_field))
+            elif issubclass(self.item_field, Field):
+                values.append(self.item_field().validate(name, v))
+            else:
+                raise ValueError("The {} should be <{}> type.".format(name, self.item_field))
         return values
 
 class ObjectField(Field):
