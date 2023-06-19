@@ -202,7 +202,9 @@ class ObjectField(Field):
             raise ValueError("{} should be <SchemaModel> type".format(name))
         
 class AnyOfField(Field):
-    def __init__(self,fields, name=None, description="", default=None,required=False):
+    def __init__(self,fields, name=None, description="", default=[],required=False):
+        if not isinstance(fields, list):
+            raise ValueError("{} should be List type.".format(name))
         self.default = default
         self.name = name
         self.required = required
@@ -210,18 +212,24 @@ class AnyOfField(Field):
         self.description = description
 
     def validate(self, name, value):
-        error = ValueError("{} should be any of <SchemaModel> or <Field> type. Error: {}".format(name, e))
-        for filed in self.fields:
+        error = ValueError("{} should be any of <SchemaModel> or <Field> type.".format(name))
+        for field in self.fields:
             try:
-                if isinstance(filed, Field):
-                    return filed.validate(name, value)
+                if isinstance(field, Field):
+                    return field.validate(name, value)
+                elif issubclass(field, SchemaBaseModel):
+                    if isinstance(value,field):
+                        return value
                 else:
                     raise error
             except ValueError as e:
                 raise error
+        raise ValueError("{} should be any of {} type.".format(name, ' or '.join([field.__name__ for field in self.fields])))
             
 class AllOfField(Field):
-    def __init__(self,fields, name=None, description="", default=None,required=False):
+    def __init__(self,fields, name=None, description="", default=[],required=False):
+        if not isinstance(fields, list):
+            raise ValueError("{} should be List type.".format(name))
         self.default = default
         self.name = name
         self.required = required
@@ -229,12 +237,20 @@ class AllOfField(Field):
         self.description = description
 
     def validate(self, name, value):
-        error = ValueError("{} should be all of <SchemaModel> or <Field> type. Error: {}".format(name, e))
-        for filed in self.fields:
+        error = ValueError("{} should be all of <SchemaModel> or <Field> type.".format(name))
+        validations = []
+        for field in self.fields:
             try:
-                if isinstance(filed, Field):
-                    filed.validate(name, value)
+                if isinstance(field, Field):
+                    validations.append(field.validate(name, value))
+                elif issubclass(field, SchemaBaseModel):
+                    print(type(field), type(value))
+                    if isinstance(value,field):
+                        validations.append(value)
                 else:
                     raise error
             except ValueError as e:
                 raise error
+        if len(self.fields) != len(validations):
+            raise ValueError("{} should be all of {} type.".format(name, ','.join([field.__name__ for field in self.fields])))
+        return validations

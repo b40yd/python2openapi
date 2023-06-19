@@ -1,6 +1,6 @@
 # encoding: utf-8
 from openapi.schema import schema_model, SchemaBaseModel
-from openapi.schema.field import IntField, StringField, ListField,ObjectField,FloatField
+from openapi.schema.field import IntField, StringField, ListField,ObjectField,FloatField,AnyOfField
 # import simplejson as json
 import json
 
@@ -29,6 +29,7 @@ class DemoList(object):
 class DemoListObject(object):
     hello = StringField()
     servers = ListField(item_field=Demo)
+    response = AnyOfField([Demo, DemoList])
 
 @schema_model
 class DemoObject(object):
@@ -58,7 +59,7 @@ def test_list_object_validate():
     # print(data.to_dict())
     # all =data.to_dict(remove=["servers"])
     # print(all)
-    data = DemoListObject(servers=[Demo(age=10,foos=Foo(double = 2.0))])
+    data = DemoListObject(servers=[Demo(age=10,foos=Foo(double = 2.0))], response=Demo(age=10,foos=Foo(double = 2.0)))
     # all =data.to_dict(remove=["servers"])
     print(data.to_dict(is_default=False))
     # for d in all['servers']:
@@ -81,10 +82,10 @@ class Server(object):
 
 
 if __name__ == '__main__':
-    test_validate()
-    test_list_validate()
+    # test_validate()
+    # test_list_validate()
     test_list_object_validate()
-    test_object_validate()
+    # test_object_validate()
 
 
    
