@@ -208,18 +208,15 @@ class AnyOfField(Field):
         self.description = description
 
     def validate(self, name, value):
-        error = ValueError("{} should be any of <SchemaModel> or <Field> type.".format(name))
         for field in self.fields:
-            try:
-                if isinstance(field, Field):
-                    return field.validate(name, value)
-                elif issubclass(field, SchemaBaseModel):
-                    if isinstance(value,field):
-                        return value
-                else:
-                    raise error
-            except ValueError as e:
-                raise error
+            if isinstance(field, Field):
+                return field.validate(name, value)
+            elif issubclass(field, SchemaBaseModel):
+                if isinstance(value,field):
+                    return value
+            else:
+                raise ValueError("{} should be any of <SchemaModel> or <Field> type.".format(name))
+            
         raise ValueError("{} should be any of {} type.".format(name, ' or '.join([field.__name__ for field in self.fields])))
             
 class AllOfField(Field):
@@ -233,20 +230,15 @@ class AllOfField(Field):
         self.description = description
 
     def validate(self, name, value):
-        error = ValueError("{} should be all of <SchemaModel> or <Field> type.".format(name))
         validations = []
         for field in self.fields:
-            try:
-                if isinstance(field, Field):
-                    validations.append(field.validate(name, value))
-                elif issubclass(field, SchemaBaseModel):
-                    print(type(field), type(value))
-                    if isinstance(value,field):
-                        validations.append(value)
-                else:
-                    raise error
-            except ValueError as e:
-                raise error
+            if isinstance(field, Field):
+                validations.append(field.validate(name, value))
+            elif issubclass(field, SchemaBaseModel):
+                if isinstance(value,field):
+                    validations.append(value)
+            else:
+                raise ValueError("{} should be all of <SchemaModel> or <Field> type.".format(name))
         if len(self.fields) != len(validations):
             raise ValueError("{} should be all of {} type.".format(name, ','.join([field.__name__ for field in self.fields])))
         return validations
