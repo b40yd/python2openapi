@@ -96,6 +96,14 @@ class Server(object):
     port = IntField(name="port", default=80, min_value=2, max_value=65535)
     protocol = StringField(name="protocol", default="http", min_length=1, max_length=255)
 
+@schema_model
+class ServerDemo(Server):
+    demo = 1
+    demo2 = ''
+    foo = []
+    foo1 = {}
+    bar1 = [{'foo': 'bar'}]
+
 
 def test_list_server():
     server = Server()
@@ -120,6 +128,10 @@ def test_all_obj():
 
     all_obj = AllOfField(fields=[Server, Bar], is_to_dict=True).validate('AllOfField', [{"protocol":"https"}, {"bar":"bar"}])
     assert(all_obj == [{'protocol': 'https'}, {'bar': 'bar'}])
+
+def test_server_option():
+    s = ServerDemo(demo=10)
+    assert(s.to_dict() == {'bar1': [{'foo': 'bar'}], 'demo': 1, 'foo': [], 'demo2': '', 'foo1': {}})
 
 
 if __name__ == '__main__':

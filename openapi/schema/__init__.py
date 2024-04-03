@@ -15,7 +15,8 @@ def schema_model(cls):
                     field_name = alisa_name
                 if field_type.get_required():
                     required_props[field_name] = field_type.get_required()
-            validate_props[field_name] = field_type
+            if not callable(field_type):
+                validate_props[field_name] = field_type
     
     class SchemaModel(cls, SchemaBaseModel):
         __doc__ = cls.__doc__
@@ -30,14 +31,16 @@ def schema_model(cls):
                 value = kwags.get(field_name, None)
                 _value = params.get(field_name, None)
                 value = _value if value is None else value
-                if value is not None:
-                    if field_name in required_props:
-                        required_diff.append(field_name)
-                    self.__dict__[field_name] = field_type.validate("<{}.{}>".format(cls.__name__,field_name),value)
-                else:
-                    if is_default:
-                        if isinstance(field_type, Field):
+                if isinstance(field_type, Field):
+                    if value is not None:
+                        if field_name in required_props:
+                            required_diff.append(field_name)
+                        self.__dict__[field_name] = field_type.validate("<{}.{}>".format(cls.__name__,field_name),value)
+                    else:
+                        if is_default:
                             self.__dict__[field_name] = field_type.get_default()
+                else:
+                    self.__dict__[field_name] = field_type
                     
             for field_name in set(required_props.keys()).difference(set(required_diff)):
                 if isinstance(field_type, Field):
@@ -100,8 +103,7 @@ def schema_model(cls):
                     elif value is None:
                         default_field = validate_props.get(attr, None)
                         if isinstance(default_field, Field) and is_default:
-                            if isinstance(field_type, Field):
-                                value = default_field.get_default()
+                            value = default_field.get_default()
                     _dict[attr] = value
             return _dict
         
