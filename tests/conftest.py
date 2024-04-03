@@ -12,10 +12,12 @@ from test_schema import (
     test_list_validate,
     test_object_validate,
     test_validate,
+    test_foo
 )
 
 
 if __name__ == "__main__":
+    test_foo()
     test_validate()
     test_list_validate()
     test_list_object_validate()

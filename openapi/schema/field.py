@@ -27,6 +27,18 @@ class Field():
         if self.enums:
             if value not in self.enums:
                 raise ValueError("{} should be in {}".format(name, self.enums))
+            
+    def check_attr(self, cls, attr):
+        flag = False
+        if type(attr) == dict:
+            for key in attr.keys():
+                flag = hasattr(cls, key)
+
+        elif type(attr) in (list, tuple):
+            for v in attr:
+                flag = self.check_attr(cls, v)
+            
+        return flag
     
     @abstractmethod
     def validate(self, name, value):
@@ -147,7 +159,7 @@ class StringField(Field):
         return value
     
 class ListField(Field):
-    def __init__(self,item_field,name=None, description="", default=[],required=False,min_items=None,max_items=None):
+    def __init__(self,item_field,name=None, description="", default=[],required=False,min_items=None,max_items=None, is_to_dict=False):
         self.default = default
         self.name = name
         self.required = required
@@ -155,6 +167,7 @@ class ListField(Field):
         self.max_items = max_items
         self.item_field = item_field
         self.description = description
+        self.is_to_dict = is_to_dict
 
     def validate(self, name, value):
         if type(value) != list:
@@ -172,9 +185,9 @@ class ListField(Field):
                 values.append(self.item_field.validate(name,v))
             elif issubclass(self.item_field, SchemaBaseModel):
                 if isinstance(v, self.item_field):
-                    values.append(v)
+                    values.append(v.to_dict() if self.is_to_dict else v)
                 else:
-                    raise ValueError("The {} should be <{}> type.".format(name, self.item_field))
+                    values.append(self.item_field(v).to_dict() if self.is_to_dict else self.item_field(v))
             elif issubclass(self.item_field, Field):
                 values.append(self.item_field().validate(name, v))
             else:
@@ -182,23 +195,25 @@ class ListField(Field):
         return values
 
 class ObjectField(Field):
-    def __init__(self,classobj, name=None, description="", default={},required=False):
+    def __init__(self,classobj, name=None, description="", default={}, required=False, is_to_dict=False):
         self.default = default
         self.name = name
         self.required = required
         self.classobj = classobj
         self.description = description
+        self.is_to_dict = is_to_dict
 
     def validate(self, name, value):
         if issubclass(self.classobj, SchemaBaseModel):
             if isinstance(value, SchemaBaseModel):
-                return value
-            return self.classobj(**value)
+                return value.to_dict if self.is_to_dict else value
+            obj = self.classobj(**value)
+            return obj.to_dict if self.is_to_dict else obj
         else:
             raise ValueError("{} should be <SchemaModel> type".format(name))
         
 class AnyOfField(Field):
-    def __init__(self,fields, name=None, description="", default=[],required=False):
+    def __init__(self,fields, name=None, description="", default=[], required=False, is_to_dict=False):
         if not isinstance(fields, list):
             raise ValueError("{} should be List type.".format(name))
         self.default = default
@@ -206,6 +221,7 @@ class AnyOfField(Field):
         self.required = required
         self.fields = fields
         self.description = description
+        self.is_to_dict = is_to_dict
 
     def validate(self, name, value):
         for field in self.fields:
@@ -213,14 +229,17 @@ class AnyOfField(Field):
                 return field.validate(name, value)
             elif issubclass(field, SchemaBaseModel):
                 if isinstance(value,field):
-                    return value
+                    return value.to_dict if self.is_to_dict else value
+                else:
+                    if self.check_attr(field, value):
+                        return field(value).to_dict() if self.is_to_dict else field(value)
             else:
                 raise ValueError("{} should be any of <SchemaModel> or <Field> type.".format(name))
             
         raise ValueError("{} should be any of {} type.".format(name, ' or '.join([field.__name__ for field in self.fields])))
             
 class AllOfField(Field):
-    def __init__(self,fields, name=None, description="", default=[],required=False):
+    def __init__(self,fields, name=None, description="", default=[], required=False, is_to_dict=False):
         if not isinstance(fields, list):
             raise ValueError("{} should be List type.".format(name))
         self.default = default
@@ -228,17 +247,22 @@ class AllOfField(Field):
         self.required = required
         self.fields = fields
         self.description = description
+        self.is_to_dict = is_to_dict
 
-    def validate(self, name, value):
+    def validate(self, name, values):
         validations = []
         for field in self.fields:
-            if isinstance(field, Field):
-                validations.append(field.validate(name, value))
-            elif issubclass(field, SchemaBaseModel):
-                if isinstance(value,field):
-                    validations.append(value)
-            else:
-                raise ValueError("{} should be all of <SchemaModel> or <Field> type.".format(name))
+            for value in values:
+                if isinstance(field, Field):
+                    validations.append(field.validate(name, value))
+                elif issubclass(field, SchemaBaseModel):
+                    if isinstance(value,field):
+                        validations.append(value.to_dict() if self.is_to_dict else value)
+                    else:
+                        if self.check_attr(field, value):
+                            validations.append(field(value).to_dict() if self.is_to_dict else field(value))
+                else:
+                    raise ValueError("{} should be all of <SchemaModel> or <Field> type.".format(name))
         if len(self.fields) != len(validations):
-            raise ValueError("{} should be all of {} type.".format(name, ','.join([field.__name__ for field in self.fields])))
+            raise ValueError("{} should be all of {} type.".format(name, ', '.join([field.__name__ for field in self.fields])))
         return validations

@@ -6,16 +6,18 @@ def schema_model(cls):
 
     validate_props = {}
     required_props = {}
-    for field_name, field_type in vars(cls).items():
+    for field_name in dir(cls):
         if not field_name.startswith('__'):
-            alisa_name =  field_type.get_name()
-            if alisa_name:
-                field_name = alisa_name
-            if field_type.get_required():
-                required_props[field_name] = field_type.get_required()
+            field_type = getattr(cls, field_name)
+            if isinstance(field_type, Field):
+                alisa_name =  field_type.get_name()
+                if alisa_name:
+                    field_name = alisa_name
+                if field_type.get_required():
+                    required_props[field_name] = field_type.get_required()
             validate_props[field_name] = field_type
     
-    class SchemaModel(SchemaBaseModel):
+    class SchemaModel(cls, SchemaBaseModel):
         __doc__ = cls.__doc__
         __name__ = cls.__name__
         __module__ = cls.__module__
@@ -34,12 +36,12 @@ def schema_model(cls):
                     self.__dict__[field_name] = field_type.validate("<{}.{}>".format(cls.__name__,field_name),value)
                 else:
                     if is_default:
-                        self.__dict__[field_name] = field_type.get_default()
-                    else:
-                        self.__dict__[field_name] = None
+                        if isinstance(field_type, Field):
+                            self.__dict__[field_name] = field_type.get_default()
                     
             for field_name in set(required_props.keys()).difference(set(required_diff)):
-                validate_props[field_name].required_missing(field_name)
+                if isinstance(field_type, Field):
+                    validate_props[field_name].required_missing(field_name)
          
         @classmethod
         def get_validate_func_map(self):
@@ -98,7 +100,8 @@ def schema_model(cls):
                     elif value is None:
                         default_field = validate_props.get(attr, None)
                         if isinstance(default_field, Field) and is_default:
-                            value = default_field.get_default()
+                            if isinstance(field_type, Field):
+                                value = default_field.get_default()
                     _dict[attr] = value
             return _dict
         
