@@ -131,7 +131,7 @@ def test_all_obj():
 
 def test_server_option():
     s = ServerDemo(demo=10)
-    assert(s.to_dict() == {'bar1': [{'foo': 'bar'}], 'demo': 1, 'foo': [], 'demo2': '', 'foo1': {}})
+    assert(s.to_dict() == {'bar1': [{'foo': 'bar'}], 'demo': 10, 'foo': [], 'demo2': '', 'foo1': {}})
 
 
 if __name__ == '__main__':

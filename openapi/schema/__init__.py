@@ -40,7 +40,7 @@ def schema_model(cls):
                         if is_default:
                             self.__dict__[field_name] = field_type.get_default()
                 else:
-                    self.__dict__[field_name] = field_type
+                    self.__dict__[field_name] = value if value else field_type
                     
             for field_name in set(required_props.keys()).difference(set(required_diff)):
                 if isinstance(field_type, Field):
