@@ -187,7 +187,7 @@ class ListField(Field):
                 if isinstance(v, self.item_field):
                     values.append(v.to_dict() if self.is_to_dict else v)
                 else:
-                    values.append(self.item_field(v).to_dict() if self.is_to_dict else self.item_field(v))
+                    values.append(self.item_field(**v).to_dict() if self.is_to_dict else self.item_field(**v))
             elif issubclass(self.item_field, Field):
                 values.append(self.item_field().validate(name, v))
             else:
@@ -232,7 +232,7 @@ class AnyOfField(Field):
                     return value.to_dict if self.is_to_dict else value
                 else:
                     if self.check_attr(field, value):
-                        return field(value).to_dict() if self.is_to_dict else field(value)
+                        return field(**value).to_dict() if self.is_to_dict else field(**value)
             else:
                 raise ValueError("{} should be any of <SchemaModel> or <Field> type.".format(name))
             
@@ -260,7 +260,7 @@ class AllOfField(Field):
                         validations.append(value.to_dict() if self.is_to_dict else value)
                     else:
                         if self.check_attr(field, value):
-                            validations.append(field(value).to_dict() if self.is_to_dict else field(value))
+                            validations.append(field(**value).to_dict() if self.is_to_dict else field(**value))
                 else:
                     raise ValueError("{} should be all of <SchemaModel> or <Field> type.".format(name))
         if len(self.fields) != len(validations):

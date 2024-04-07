@@ -1,6 +1,6 @@
 # encoding: utf-8
 from openapi.schema import schema_model, SchemaBaseModel
-from openapi.schema.field import IntField, StringField, ListField,ObjectField,FloatField,AnyOfField, AllOfField
+from openapi.schema.field import IntField, StringField, ListField,ObjectField,FloatField,AnyOfField, AllOfField, BoolField
 # import simplejson as json
 import json
 
@@ -118,12 +118,12 @@ def test_any_obj():
     assert(any_obj_data.to_dict() == {"bar":"https"})
     assert(isinstance(any_obj_data, Bar))
 
-    any_obj_data = AnyOfField(fields=[Server, Bar]).validate('AnyOfField', Server({"protocol":"https"}))
+    any_obj_data = AnyOfField(fields=[Server, Bar]).validate('AnyOfField', Server(protocol="https"))
     assert(any_obj_data.to_dict() == {"protocol":"https"})
     assert(isinstance(any_obj_data, Server))
 
 def test_all_obj():
-    all_obj = AllOfField(fields=[Server, Bar], is_to_dict=True).validate('AllOfField', [Server({"protocol":"https"}), Bar({"bar":"bar"})])
+    all_obj = AllOfField(fields=[Server, Bar], is_to_dict=True).validate('AllOfField', [Server(protocol="https"), Bar(bar="bar")])
     assert(all_obj == [{'protocol': 'https'}, {'bar': 'bar'}])
 
     all_obj = AllOfField(fields=[Server, Bar], is_to_dict=True).validate('AllOfField', [{"protocol":"https"}, {"bar":"bar"}])
@@ -133,6 +133,20 @@ def test_server_option():
     s = ServerDemo(demo=10)
     assert(s.to_dict() == {'bar1': [{'foo': 'bar'}], 'demo': 10, 'foo': [], 'demo2': '', 'foo1': {}})
 
+
+@schema_model
+class ServerDemo2(Server):
+    params = ListField(item_field=StringField(name='item'), name='params')
+    is_default = BoolField(name='is_default')
+
+def test_default_params():
+    opts = {"params":['', ''], "is_default": False}
+    s = ServerDemo2(**opts)
+    assert(s.to_dict() ==  {'is_default': False, 'params': ['', '']})
+
+    opts = {"params":[], "is_default": True}
+    s = ServerDemo2(**opts)
+    assert(s.to_dict() ==  {'is_default': True, 'params': []})
 
 if __name__ == '__main__':
     test_validate()

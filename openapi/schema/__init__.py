@@ -1,6 +1,6 @@
 from .field import SchemaBaseModel, Field
 
-def schema_model(cls):
+def schema_model(cls, is_default=False):
     if not isinstance(cls, type):
         raise ValueError("{} is not object.".format(cls.__name__))
 
@@ -23,14 +23,10 @@ def schema_model(cls):
         __name__ = cls.__name__
         __module__ = cls.__module__
         __validate_props = validate_props
-        def __init__(self, params={}, is_default=False, **kwags):
+        def __init__(self, **kwags):
             required_diff = []
-            if params and type(params) != dict:
-                raise ValueError("params should be <class 'dict'>.")
             for field_name, field_type in validate_props.items():
                 value = kwags.get(field_name, None)
-                _value = params.get(field_name, None)
-                value = _value if value is None else value
                 if isinstance(field_type, Field):
                     if value is not None:
                         if field_name in required_props:
