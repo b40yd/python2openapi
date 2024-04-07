@@ -8,15 +8,15 @@ def schema_model(cls, is_default=False):
     required_props = {}
     for field_name in dir(cls):
         if not field_name.startswith('__'):
-            field_type = getattr(cls, field_name)
-            if isinstance(field_type, Field):
-                alisa_name =  field_type.get_name()
+            field_value = getattr(cls, field_name)
+            if isinstance(field_value, Field):
+                alisa_name =  field_value.get_name()
                 if alisa_name:
                     field_name = alisa_name
-                if field_type.get_required():
-                    required_props[field_name] = field_type.get_required()
-            if not callable(field_type):
-                validate_props[field_name] = field_type
+                if field_value.get_required():
+                    required_props[field_name] = field_value.get_required()
+            if not callable(field_value):
+                validate_props[field_name] = field_value
     
     class SchemaModel(cls, SchemaBaseModel):
         __doc__ = cls.__doc__

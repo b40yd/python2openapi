@@ -144,8 +144,8 @@ def test_default_params():
     s = ServerDemo2(**opts)
     assert(s.to_dict() ==  {'is_default': False, 'params': ['', '']})
 
-    opts = {"params":[], "is_default": True}
-    s = ServerDemo2(**opts)
+    opts = {"params":[], "is_default": True, "ok":111}
+    s = ServerDemo2(hello="ssd", **opts)
     assert(s.to_dict() ==  {'is_default': True, 'params': []})
 
 if __name__ == '__main__':
