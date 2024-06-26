@@ -52,6 +52,11 @@ class AnyField(Field):
         self.description = description
     
     def validate(self, name, value):
+        if value is None:
+            if self.required:
+                raise ValueError('"{}" is missing.'.format(name))
+            else:
+                return self.default
         return super().validate(name, value)
 
 class IntField(Field):
@@ -66,9 +71,16 @@ class IntField(Field):
         self.format = format
 
     def validate(self, name, value):
-        if type(value) != int:
+        if value is None:
+            if self.required:
+                raise ValueError('"{}" is missing.'.format(name))
+            else:
+                return self.default
+        try:
+            value = int(value)
+        except ValueError:
             raise ValueError("{} should be integer type".format(name))
-        
+            
         if self.min_value is not None and self.min_value > value:
             raise ValueError("{} should be larger than {}".format(name, self.min_value))
         
@@ -90,12 +102,14 @@ class FloatField(Field):
         self.enums = enums
 
     def validate(self, name, value):
-        if sys.version_info.major == 2:
-            condition = type(value) != float and type(value) != int and type(value) != long
-        else:
-            condition = type(value) != float and type(value) != int 
-
-        if condition:
+        if value is None:
+            if self.required:
+                raise ValueError('"{}" is missing.'.format(name))
+            else:
+                return self.default
+        try:
+            value = float(value)
+        except ValueError:
             raise ValueError("{} should be float type".format(name))
         
         if self.min_value is not None and self.min_value > value:
@@ -115,6 +129,25 @@ class BoolField(Field):
         self.description = description
 
     def validate(self, name, value):
+        valueBool = {
+            "true": True,
+            "false": False
+        }
+        if value is None:
+            if self.required:
+                raise ValueError('"{}" is missing.'.format(name))
+            else:
+                return self.default
+        try:
+            if sys.version_info.major == 2:
+                if type(value) in (str, unicode):
+                    value = valueBool[value.lower()]
+            else:
+                if type(value) == str:
+                    value = valueBool[value.lower()]
+        except:
+            raise ValueError("{} should be bool type".format(name))
+        
         if type(value) != bool:
             raise ValueError("{} should be bool type".format(name))
         return value
@@ -132,12 +165,18 @@ class StringField(Field):
         self.format = format
 
     def validate(self, name, value):
+        if value is None:
+            if self.required:
+                raise ValueError('"{}" is missing.'.format(name))
+            else:
+                return self.default
+            
         if sys.version_info.major == 2:
             if not type(value) in (str,unicode):
                 raise ValueError("{} should be string type".format(name))
         else:
             if type(value) != str:
-                    raise ValueError("{} should be string type".format(name))
+                raise ValueError("{} should be string type".format(name))
         
         length = len(value)
         if self.min_length is not None and self.min_length > length:
@@ -170,6 +209,12 @@ class ListField(Field):
         self.is_to_dict = is_to_dict
 
     def validate(self, name, value):
+        if value is None:
+            if self.required:
+                raise ValueError('"{}" is missing.'.format(name))
+            else:
+                return self.default
+            
         if type(value) != list:
             raise ValueError("{} should be list type".format(name))
         
@@ -204,6 +249,12 @@ class ObjectField(Field):
         self.is_to_dict = is_to_dict
 
     def validate(self, name, value):
+        if value is None:
+            if self.required:
+                raise ValueError('"{}" is missing.'.format(name))
+            else:
+                return self.default
+            
         if issubclass(self.classobj, SchemaBaseModel):
             if isinstance(value, SchemaBaseModel):
                 return value.to_dict if self.is_to_dict else value
@@ -224,6 +275,12 @@ class AnyOfField(Field):
         self.is_to_dict = is_to_dict
 
     def validate(self, name, value):
+        if value is None:
+            if self.required:
+                raise ValueError('"{}" is missing.'.format(name))
+            else:
+                return self.default
+            
         for field in self.fields:
             if isinstance(field, Field):
                 return field.validate(name, value)
@@ -240,6 +297,12 @@ class AnyOfField(Field):
             
 class AllOfField(Field):
     def __init__(self,fields, name=None, description="", default=[], required=False, is_to_dict=False):
+        if value is None:
+            if self.required:
+                raise ValueError('"{}" is missing.'.format(name))
+            else:
+                return self.default
+            
         if not isinstance(fields, list):
             raise ValueError("{} should be List type.".format(name))
         self.default = default
@@ -251,6 +314,11 @@ class AllOfField(Field):
 
     def validate(self, name, values):
         validations = []
+        if value is None:
+            if self.required:
+                raise ValueError('"{}" is missing.'.format(name))
+            else:
+                return self.default
         for field in self.fields:
             for value in values:
                 if isinstance(field, Field):
