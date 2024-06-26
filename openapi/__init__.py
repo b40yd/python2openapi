@@ -1,7 +1,10 @@
 import yaml
 import inspect
+import re
 from functools import wraps
+import logging
 from openapi.schema.field import (
+    Field,
     IntField,
     BoolField,
     FloatField,
@@ -10,41 +13,47 @@ from openapi.schema.field import (
     StringField,
     SchemaBaseModel,
 )
+from django.conf.urls import url
+from django.http import HttpRequest
 
 OPEN_API_VERSION = "3.0.0"
 SWAGGER_DOC_SEPARATOR = "---"
 
 
 class _Swagger(object):
+    django_urls = []
     paths = {}
     models = {}
-    parameters = {}
+    parameters = []
     global_tags = []
 
-
 def swagger_setup(
-    title="", servers=[], version="", description="", term="", contact={}, tags=[]
+    title="", servers=[], version="", description="", term="", contact={}, tags=[], securitySchemes={}
 ):
     """
     openapi: 3.0
     """
     _Swagger.global_tags.extend(tags)
     return {
-        "openapi": OPEN_API_VERSION,
-        "info": {
-            "title": title,
-            "version": version,
-            "description": description,
-            "termsOfService": term,
-            "contact": contact,
-        },
-        "servers": servers,
-        "paths": _Swagger.paths,
-        "components": {
-            "schemas": _Swagger.models,
-            "parameters": _Swagger.parameters,
-        },
-        "tags": _Swagger.global_tags,
+        "django_urls": _Swagger.django_urls,
+        "swagger_doc": {
+            "openapi": OPEN_API_VERSION,
+            "info": {
+                "title": title,
+                "version": version,
+                "description": description,
+                "termsOfService": term,
+                "contact": contact,
+            },
+            "servers": servers,
+            "paths": _Swagger.paths,
+            "components": {
+                "schemas": _Swagger.models,
+                "parameters": {param['name']: param for param in _Swagger.parameters},
+                "securitySchemes": securitySchemes
+            },
+            "tags": _Swagger.global_tags,
+        }
     }
 
 
@@ -192,8 +201,19 @@ def register_swagger_object_model(model):
 
 def gen_parameter_doc(model, in_pos):
     items = dict()
-    parameters = {}
-    if isinstance(model, SchemaBaseModel) or issubclass(model, SchemaBaseModel):
+    parameters = []
+    if isinstance(model, Field):
+        default = {
+            "in": in_pos,
+            "description": model.description,
+            "required": True if in_pos.lower() == 'path' else model.required,
+        }
+        default["name"] = model.name
+        default["schema"] = _parser_parameter(model)
+        
+        parameters.append(default)
+        return parameters
+    elif isinstance(model, SchemaBaseModel) or issubclass(model, SchemaBaseModel):
         items = model.get_validate_func_map().items()
     else:
         items = vars(model).items()
@@ -202,7 +222,7 @@ def gen_parameter_doc(model, in_pos):
             default = {
                 "in": in_pos,
                 "description": field_type.description,
-                "required": field_type.required,
+                "required": True if in_pos.lower() == 'path' else field_type.required,
             }
 
             alisa_name = field_type.name
@@ -211,45 +231,69 @@ def gen_parameter_doc(model, in_pos):
             else:
                 default["name"] = field_name
             default["schema"] = _parser_parameter(field_type)
-            parameters[default["name"]] = default
+            parameters.append(default)
     return parameters
 
 
 def register_swagger_query_parameter(model):
     """Register parameter definition in swagger"""
-    _Swagger.parameters = gen_parameter_doc(model, "query")
+    _Swagger.parameters.extend(gen_parameter_doc(model, "query"))
     return model
 
 
 def register_swagger_header_parameter(model):
     """Register parameter definition in swagger"""
-    _Swagger.parameters = gen_parameter_doc(model, "header")
+    _Swagger.parameters.extend(gen_parameter_doc(model, "header"))
     return model
 
 
 def register_swagger_cookie_parameter(model):
     """Register parameter definition in swagger"""
-    _Swagger.parameters = gen_parameter_doc(model, "cookie")
+    _Swagger.parameters.extend(gen_parameter_doc(model, "cookie"))
     return model
 
 
 def register_swagger_path_parameter(model):
     """Register parameter definition in swagger"""
-    _Swagger.parameters = gen_parameter_doc(model, "path")
+    _Swagger.parameters.extend(gen_parameter_doc(model, "path"))
     return model
 
 
 def swagger_api(
     path="",
     method="",
-    parameters={},
+    parameters=[],
     request_body=None,
-    response=None,
+    request_content_type="application/json",
+    responses=[],
     tags=[],
     summary="",
     description="",
     security=[],
 ):
+    """
+    @schema_model
+    class Query(object):
+        start = IntField()
+
+        end = IntField(max_value=100)
+
+    path="/demo/{name}",
+
+    parameters=[(String(name="name"), "path"), (String(name="age"), "query")],
+
+    request_body=ListField(item_field=Query),
+
+    response=[{"response": response, "content_type": "application/json", "status": 200}]
+
+    tags=["demo"]
+
+    summary="",
+
+    description="",
+
+    security=[]
+    """
     if type(path) == str and path != "":
         if _Swagger.paths.get(path, None):
             raise ValueError("Path is existed.")
@@ -268,17 +312,29 @@ def swagger_api(
     }
     if tags:
         default[method]["tags"] = tags
-    if response:
-        default[method]["responses"] = response
 
-    if parameters:
-        for p in parameters:
-            default[method]["parameters"].append(parameters[p])
-
-    if request_body:
-        default[method]["requestBody"] = request_body
+    for model, pos in parameters:
+        default[method]["parameters"].extend(gen_parameter_doc(model=model, in_pos=pos))
+        
+    if request_body and (isinstance(request_body, (Field, SchemaBaseModel)) or issubclass(request_body, SchemaBaseModel)):
+        default[method]["requestBody"] = gen_request_body(request_body, request_content_type)
+    
+    for response in responses:
+        if type(response) == dict and (isinstance(response['response'], (Field, SchemaBaseModel)) or issubclass(response['response'], SchemaBaseModel)):
+            default[method]["responses"].update(gen_response(response['response'], 
+                                                             response.get('status', 200), 
+                                                             response.get('content_type', 'application/json')))
 
     def bind(func):
+        validators = {}
+        for model, pos in parameters:
+            if not type(pos) in (str, unicode) or not pos.upper() in ('PATH', 'QUERY'):
+                raise ValueError("Only use 'PATH or 'QUERY")
+            
+            path_query = validators.get(pos.upper(), [])
+            path_query.append(model)
+            validators[pos.upper()] = path_query
+        
         doc = inspect.getdoc(func)
         if doc:
             api = build_swagger_docs(doc)
@@ -287,23 +343,99 @@ def swagger_api(
                     api["security"] = security
                 if tags:
                     api["tags"] = tags
-                if parameters:
-                    for p in parameters:
-                        api.get("parameters", []).append(parameters[p])
-                if request_body:
-                    api["requestBody"] = request_body
-                if response:
-                    api["responses"] = response
+                
+                for model, pos in parameters:
+                    api.get("parameters", []).extend(gen_parameter_doc(model=model, in_pos=pos))
+
+                if request_body and (isinstance(request_body, (Field, SchemaBaseModel)) or issubclass(request_body, SchemaBaseModel)):
+                    api["requestBody"] = gen_request_body(request_body, request_content_type)
+                for response in responses:
+                    if type(response) == dict and \
+                        (isinstance(response['response'], (Field, SchemaBaseModel)) or issubclass(response['response'], SchemaBaseModel)):
+                        api["responses"].update(gen_response(response['response'], 
+                                                             response.get('status', 200), 
+                                                             response.get('content_type', 'application/json')))
+
                 _Swagger.paths[path] = {method: api}
             else:
                 _Swagger.paths[path] = default
         else:
             _Swagger.paths[path] = default
 
+        
         @wraps(func)
         def api_wraps(*argc, **kwags):
-            return func(*argc, **kwags)
+            request = argc[0]
+            new_args = [request]
+            new_kwags = {}
+            # validator in path
+            for (arg, validator) in zip(argc[1:], validators.get('PATH', [])):
+                if isinstance(validator, (StringField, IntField, FloatField, BoolField)):
+                    new_args.append(validator.validate(validator.name, arg))
+                else:
+                    raise Exception("Data type error.")
+                
+            # validator in query
+            new_kwags.update(query_validator(request, validators))
 
+            # validator in request body
+            if request_body:
+                new_kwags.update(request_body_validator(request, request_body))
+            return func(*new_args, **new_kwags)
+        url_path = re.sub(r'\{\w+\}', r'([^/]+)', path)
+        _Swagger.django_urls.append(url(r"^%s$" % url_path.lstrip('/'), api_wraps))
         return api_wraps
 
     return bind
+
+def request_body_validator(request, validate_model):
+    params = {}
+    if not isinstance(request, HttpRequest): 
+        raise Exception("request is bad.")
+    
+    body = request.body if request.body else None
+    if isinstance(validate_model, (ListField, ObjectField)):
+        validate_model.is_to_dict = True
+        obj = validate_model.validate(validate_model.name or validate_model.__class__.__name__, body)
+        if validate_model.name:
+            params[validate_model.name] = obj
+    elif issubclass(validate_model, SchemaBaseModel):
+        params.update(validate_model(body).to_dict())
+    else:
+        raise Exception("Bind query parameters failed.")
+    return params
+
+def query_validator(request, validators={}):
+    params = {}
+    if not isinstance(request, HttpRequest): 
+        raise Exception("request is bad.")
+    
+    get_params = request.GET.copy()
+    post_params = request.POST.copy()
+    all_params = get_params.copy()
+    all_params.update(post_params)
+
+    for validator in validators.get('QUERY', []):
+        if isinstance(validator, (StringField, IntField, FloatField, BoolField)):
+            for key, value in all_params.items():
+                if key == validator.name:
+                    params[key] = validator.validate(validator.name, value)
+
+        elif isinstance(validator, ListField):
+            for k, v in all_params.items():
+                if k == validator.name and type(v) == list:
+                    validator.is_to_dict = True
+                    lst = validator.validate(validator.name, v)
+                    params[k] = lst
+        elif isinstance(validator, ObjectField):
+            validator.is_to_dict = True
+            _all_params = {}
+            for key in all_params.keys():
+                _all_params[key] = all_params.get(key)
+            params[validator.name] = validator.validate(validator.name, _all_params)
+        elif issubclass(validator, SchemaBaseModel):
+            _params = {key: value for key, value in all_params.items()}
+            params.update(validator(**_params).to_dict())
+        else:
+            raise Exception("Bind query parameters failed.")
+    return params

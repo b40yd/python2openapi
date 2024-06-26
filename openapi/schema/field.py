@@ -1,5 +1,6 @@
 import re
 import sys
+import json
 from abc import ABCMeta,abstractmethod
 
 class SchemaBaseModel(object):
@@ -39,6 +40,15 @@ class Field():
                 flag = self.check_attr(cls, v)
             
         return flag
+    
+    def get_value_from_str(self, value):
+        if sys.version_info.major == 2:
+            if type(value) in (str, unicode):
+                value = json.loads(value)
+        else:
+            if type(value) == str:
+                value = json.loads(value)
+        return value
     
     @abstractmethod
     def validate(self, name, value):
@@ -107,6 +117,7 @@ class FloatField(Field):
                 raise ValueError('"{}" is missing.'.format(name))
             else:
                 return self.default
+            
         try:
             value = float(value)
         except ValueError:
@@ -214,9 +225,14 @@ class ListField(Field):
                 raise ValueError('"{}" is missing.'.format(name))
             else:
                 return self.default
-            
+
+        try:
+            value = self.get_value_from_str(value)
+        except Exception as e:
+            raise ValueError("{} should be list type: {}".format(name, e))
+
         if type(value) != list:
-            raise ValueError("{} should be list type".format(name))
+            raise ValueError("{} should be list type: {}".format(name, type(value)))
         
         if self.min_items is not None and len(value) < self.min_items:
             raise ValueError('{} should be at least {} items.'.format(name, self.min_items))
@@ -255,11 +271,16 @@ class ObjectField(Field):
             else:
                 return self.default
             
+        try:
+            value = self.get_value_from_str(value)
+        except:
+            raise ValueError("{} should be object type".format(name))
+            
         if issubclass(self.classobj, SchemaBaseModel):
             if isinstance(value, SchemaBaseModel):
                 return value.to_dict if self.is_to_dict else value
             obj = self.classobj(**value)
-            return obj.to_dict if self.is_to_dict else obj
+            return obj.to_dict() if self.is_to_dict else obj
         else:
             raise ValueError("{} should be <SchemaModel> type".format(name))
         
@@ -285,6 +306,7 @@ class AnyOfField(Field):
             if isinstance(field, Field):
                 return field.validate(name, value)
             elif issubclass(field, SchemaBaseModel):
+                value = self.get_value_from_str(value)
                 if isinstance(value,field):
                     return value.to_dict if self.is_to_dict else value
                 else:
@@ -324,6 +346,7 @@ class AllOfField(Field):
                 if isinstance(field, Field):
                     validations.append(field.validate(name, value))
                 elif issubclass(field, SchemaBaseModel):
+                    value = self.get_value_from_str(value)
                     if isinstance(value,field):
                         validations.append(value.to_dict() if self.is_to_dict else value)
                     else:
