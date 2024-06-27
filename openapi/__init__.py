@@ -27,6 +27,7 @@ class _Swagger(object):
     parameters = []
     global_tags = []
 
+
 def swagger_setup(
     title="", servers=[], version="", description="", term="", contact={}, tags=[], securitySchemes={}
 ):
@@ -437,8 +438,11 @@ def query_validator(request, validators={}):
         elif isinstance(validator, ObjectField):
             validator.is_to_dict = True
             _all_params = {}
-            for key in all_params.keys():
-                _all_params[key] = all_params.get(key)
+            for key, values in all_params.items():
+                if len(values) > 1:
+                    _all_params[key] = values
+                else:
+                    _all_params[key] = all_params.get(key)
             params[validator.name] = validator.validate(validator.name, _all_params)
         elif issubclass(validator, SchemaBaseModel):
             _params = {key: value for key, value in all_params.items()}
