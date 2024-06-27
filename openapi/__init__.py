@@ -152,11 +152,18 @@ def _gen_model_doc(model):
     default = {"type": "object", "properties": {}}
     items = dict()
 
-    if isinstance(model, SchemaBaseModel) or issubclass(model, SchemaBaseModel):
+    if isinstance(model, ObjectField):
+        if inspect.isclass(model.classobj):
+            return _parser_parameter(model.classobj)
+    elif isinstance(model, Field):
+        items = vars(model).items()
+    elif isinstance(model, SchemaBaseModel) or issubclass(model, SchemaBaseModel):
         items = model.get_validate_func_map().items()
     else:
         items = vars(model).items()
     for field_name, field_type in items:
+        if not isinstance(field_type, Field):
+            continue
         if not field_name.startswith("__"):
             alisa_name = field_type.name
             if alisa_name:
