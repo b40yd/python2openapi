@@ -1,0 +1,247 @@
+#+title: Swagger
+#+PANDOC_OPTIONS: "variable:CJKmainfont:Noto Sans CJK SC"
+
+* 介绍
+
+将swagger和django view视图绑定，并实现自动生成OpenAPI文档。
+
+* Schema介绍
+所有类型校验都基于 *Field* 实现。
+
+注意： 所有Field类型定义，都包含了一个name，该name在报错时会显示，主要用途是与视图函数的行参进行绑定。
+
+*** IntField
+整型校验
+
+*** FloatField
+浮点型
+
+*** StringField
+字符串
+
+*** BoolField
+布尔值
+
+*** ListField
+数组类型
+
+*** ObjectField
+对象类型, 用于json对象，在swagger中生成时会直接引用模型。
+
+例如：
+#+begin_src yaml
+schemas:
+    UserInfo:
+      type: object
+      properties:
+        age:
+          minimum: 1
+          type: integer
+          maximum: 100
+        name:
+          minLength: 1
+          type: string
+          maxLength: 20
+/hello:
+    get:
+      responses:
+        '200':
+          description: OK
+      parameters:
+        - schema:
+            $ref: '#/components/schemas/UserInfo'
+          required: false
+          description: ''
+          name: query
+          in: query
+      tags: []
+      summary: ''
+      security: []
+      description: ''
+#+end_src
+
+*** 特殊类型
+
+***** AnyOfField
+指定一个模型列表，实例只需匹配列表中的任何一个模型。这对于表示一个值可以是多种类型中的任何一种或满足多个约束中的任何一个非常有用。
+
+例如，如果你有一个属性，它可以是字符串或数字，或者是一个满足特定条件的对象，你可以使用anyOf来表示这种情况。
+#+begin_src yaml
+typesExample:
+  anyOf:
+    - type: string
+    - type: number
+    - type: object
+      properties:
+        prop1:
+          type: string
+      required:
+        - prop1
+#+end_src
+
+***** AllOfField
+用于组合多个模型，它要求一个实例必须匹配所有给定的模型。这通常用于模型继承和组合，允许你创建一个新模型，它将继承一个或多个其他模型的所有属性。
+
+例如，假设你有两个模型，一个是Person，另一个是Employee。如果Employee是Person的特殊情况，那么Employee可以使用allOf来包含Person的所有属性，再加上一些特定于Employee的属性。
+
+#+begin_src yaml
+Person:
+  type: object
+  properties:
+    name:
+      type: string
+    age:
+      type: integer
+
+Employee:
+  allOf:
+    - $ref: '#/definitions/Person'
+    - type: object
+      properties:
+        employeeId:
+          type: string
+#+end_src
+
+*** 创建SchemaModel
+所有类使用 *schema_model* 装饰器装饰后都会是一个SchemaModel类。
+
+SchemaModel会继承SchemaBaseModel，该类主要用于类型判断时，判断是否它的实例或者是子类。
+
+例如：定义一个schema
+
+#+begin_src python :results output
+  @schema_model
+  class UserInfo(object):
+      name = StringField(name="name", min_length=1, max_length=20)
+      age = IntField(name="age", min_value=1, max_value=100)
+
+      # A non field type
+      phone=123
+#+end_src
+
+在实例化 *UserHome* 时，会自动使用 *Field* 的对应的类型进行校验。
+
+例如：
+
+#+begin_src python :results output
+  userHome = UserInfo(name=1, age=12) # 会报name的类型错误。
+  userHome = UserInfo(name="Tom", age=101) # 会报age的范围值超过了100
+  userHome = UserInfo(name="Tigger", age=18, phone='2234') # 会忽略phone的校验，因为它不是一个有效的Field类型。 
+#+end_src
+
+* swagger
+
+参数绑定都是基于Field的name属性进行的。所以在定义Path、Query、Body时需要指定名称，必须与函数的参数名称一致。Path参数比较特殊，它是按顺序绑定的。
+
+*注意*: 所有数组、对象类型都会被转换成数组、字典。
+
+*** 创建API
+创建API如果需要生成swagger，必须使用 *swagger_api* 装饰器对视图函数进行装饰。该装饰器支持以下参数。
+
+- path URL路径参数，例如"/demo/{name}",
+
+- parameters 参数定义，该字段是一个元组数组，主要指定Path， Query的参数。例如：[(String(name="name"), "path"), (String(name="age"), "query")],
+
+- request_body 请求提参数定义，主要用于POST、PUT、DELETE等方法的参数。例如： ListField(item_field=UserHome),
+
+- response 响应数据类型定义，该参数是一个字典数组。
+  
+  字典参数：
+  1. response，该字段是具体的响应类型。
+
+  2. status是响应状态，默认200。
+
+  3. content_type响应类型。
+
+  例如：[{"response": response, "content_type": "application/json", "status": 200}]
+
+- tags 指定接口的tag，用于分类聚合，支持多个tag，在swagger ui中会在对应的tag中显示该接口。 例如：["demo"]
+
+- summary 介绍
+
+- description 详细说明
+
+- security 安全认证，鉴定权限等，支持jwt、 http、oauth等。
+
+*** Path参数
+定义path参数。
+
+#+begin_src python
+  @swagger_api(path="/hello/{age}", 
+               method="get", 
+               parameters=[(IntField(name="age", min_value=1, max_value=100), "path")])
+  def index(request, age):
+    return api_ok_response("hello {age} type({ty})".format(age=age, ty=type(age)))
+
+  @swagger_api(path="/demo/{name}", 
+               method="get", 
+               parameters=[(StringField(name="name", min_length=1, max_length=10), "path")])
+  def demo(request, name):
+    return api_ok_response("demo {name} {ty}".format(name=name, ty=type(name)))
+#+end_src
+ 
+*** Query参数
+定义query参数。
+
+#+begin_src python :results output
+@swagger_api(path="/hello", method="get", parameters=[(StringField(name="query"), "query")])
+def hello(request, query):
+  """
+  """
+  return api_ok_response("{}".format(query))
+#+end_src
+
+***** 使用ObjectField绑定所有参数
+如果使用ObjectField时，需要使用register_swagger_object_model装饰器将它的classobj,也就是SchemaModel类注册进components/schemas中，否则swagger文档会找不到引用。
+
+#+begin_src python :results output
+  @register_swagger_object_model
+  @schema_model
+  class UserInfo(object):
+    name = StringField(name="name", min_length=1, max_length=20)
+    age = IntField(name="age", min_value=1, max_value=100)
+
+
+  @swagger_api(path="/hello_object", method="get", parameters=[(ObjectField(classobj=UserInfo, name="query"), "query")])
+  def helloObject(request, query={}):
+    """
+    """
+    return api_ok_response("{}".format(query))
+#+end_src
+
+
+*** body参数
+
+#+begin_src python :results output
+@swagger_api(path="/user/foo", method="post", 
+             request_body=ObjectField(classobj=UserInfo, name="filter_time"))
+def foo(request, filter_time={}):
+   return api_ok_response("this user foo: {}".format(filter_time))
+#+end_src
+
+*** 响应body
+注意响应的body定义，仅生成文档，当前并不做返回值校验(如果校验，所有接口都需要定义模型,可能会与现存接口冲突)。
+
+#+begin_src python :results output
+  @swagger_api(path="/user/bar", method="post", 
+               request_body=ObjectField(classobj=UserInfo, name="filter_time"),
+               responses=[{"response":ListField(item_field=UserHome), "status": 200, "content_type": "application/json"}])
+  def bar(request, filter_time={}):
+     return api_ok_response("this user foo: {}".format(filter_time))
+#+end_src
+
+* 注册urls并生成docs
+
+将django_urls注册到django的路由中。
+
+#+begin_src python :results output
+  routers = []
+  swagger_doc = swagger_setup(title="demo", servers=[{"url": "/api/v1"}], version="1.0.0")
+  routers.extend(swagger_doc['django_urls'])
+
+  def docs(request):
+      # return api_ok_response(yaml.safe_dump(swagger_doc['swagger_doc'], default_flow_style=False))
+      return api_ok_response(swagger_doc['swagger_doc'])
+
+  routers.extend([url(r'^docs$', docs)])
+#+end_src
