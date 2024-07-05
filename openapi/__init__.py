@@ -14,18 +14,22 @@ from openapi.schema.field import (
     SchemaBaseModel,
 )
 from django.conf.urls import url
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 
 OPEN_API_VERSION = "3.0.0"
 SWAGGER_DOC_SEPARATOR = "---"
 
 
 class _Swagger(object):
-    django_urls = []
     paths = {}
     models = {}
     parameters = []
     global_tags = []
+    handlers = {}
+
+    @staticmethod
+    def gen_django_urls():
+        return [url(r"^%s$" % api_url.lstrip('/'), route_hander(api_url)) for api_url, _ in _Swagger.handlers.items()]
 
 
 def swagger_setup(
@@ -36,7 +40,7 @@ def swagger_setup(
     """
     _Swagger.global_tags.extend(tags)
     return {
-        "django_urls": _Swagger.django_urls,
+        "django_urls": _Swagger.gen_django_urls(),
         "swagger_doc": {
             "openapi": OPEN_API_VERSION,
             "info": {
@@ -269,7 +273,7 @@ def register_swagger_path_parameter(model):
 
 def swagger_api(
     path="",
-    method="",
+    method="get",
     parameters=[],
     request_body=None,
     request_content_type="application/json",
@@ -302,9 +306,13 @@ def swagger_api(
 
     security=[]
     """
+    paths = {}
+    method = method.lower()
+    if not method in ('get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'):
+        raise ValueError("method is must be (get, post, put, patch, delete, head, options, trace)")
+    
     if type(path) == str and path != "":
-        if _Swagger.paths.get(path, None):
-            raise ValueError("Path is existed.")
+        paths = _Swagger.paths.get(path, {})
 
     if not summary:
         summary = path.split("/")[-1]
@@ -364,13 +372,13 @@ def swagger_api(
                                                              response.get('status', 200), 
                                                              response.get('content_type', 'application/json')))
 
-                _Swagger.paths[path] = {method: api}
+                paths.update({method: api})
             else:
-                _Swagger.paths[path] = default
+                paths.update(default)
         else:
-            _Swagger.paths[path] = default
+            paths.update(default)
+        _Swagger.paths[path] = paths
 
-        
         @wraps(func)
         def api_wraps(*argc, **kwags):
             request = argc[0]
@@ -391,10 +399,24 @@ def swagger_api(
                 new_kwags.update(request_body_validator(request, request_body))
             return func(*new_args, **new_kwags)
         url_path = re.sub(r'\{\w+\}', r'([^/]+)', path)
-        _Swagger.django_urls.append(url(r"^%s$" % url_path.lstrip('/'), api_wraps))
+        handers = _Swagger.handlers.get(url_path, {})
+        handers[method] = api_wraps
+        _Swagger.handlers[url_path] = handers
         return api_wraps
 
     return bind
+
+def route_hander(url_path):
+    def hander(*argc, **kwags):
+        request = argc[0]
+        if not isinstance(request, HttpRequest): 
+            raise HttpResponse(status=404)
+        _hander_map = _Swagger.handlers.get(url_path, {})
+        _hander = _hander_map.get(str(request.method).lower(), None)
+        if callable(_hander):
+            return _hander(*argc, **kwags)
+        return HttpResponse(status=405)
+    return hander
 
 def request_body_validator(request, validate_model):
     params = {}
