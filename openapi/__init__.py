@@ -3,7 +3,7 @@ import inspect
 import re
 from functools import wraps
 import logging
-from api_base.schema.field import (
+from openapi.schema.field import (
     Field,
     IntField,
     BoolField,
