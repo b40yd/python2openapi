@@ -3,7 +3,7 @@ import inspect
 import re
 from functools import wraps
 import logging
-from openapi.schema.field import (
+from api_base.schema.field import (
     Field,
     IntField,
     BoolField,
@@ -11,6 +11,7 @@ from openapi.schema.field import (
     ListField,
     ObjectField,
     StringField,
+    AnyOfField,
     SchemaBaseModel,
 )
 from django.conf.urls import url
@@ -128,6 +129,11 @@ def _parser_parameter(field):
             schema["minLength"] = field.min_length
         if field.max_length:
             schema["maxLength"] = field.max_length
+    elif isinstance(field, AnyOfField):
+        schema["type"] = "anyOf"
+        for f in field.fields:
+            schema["items"] = _parser_parameter(f)
+        return schema
     else:
         if issubclass(field, SchemaBaseModel):
             gen_model_doc(field)

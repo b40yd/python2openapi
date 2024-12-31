@@ -1,4 +1,4 @@
-from .field import SchemaBaseModel, Field
+from .field import *
 
 def schema_model(cls, is_default=False):
     if not isinstance(cls, type):
@@ -102,6 +102,9 @@ def schema_model(cls, is_default=False):
                             value = default_field.get_default()
                     _dict[attr] = value
             return _dict
+        
+        def to_json(self):
+            self.to_dict(is_default=True)
         
     SchemaModel.__name__ = cls.__name__
     return SchemaModel

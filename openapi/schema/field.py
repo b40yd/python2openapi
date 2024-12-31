@@ -102,7 +102,7 @@ class IntField(Field):
         return value
     
 class FloatField(Field):
-    def __init__(self,name=None, description="", default=0.0,required=False,min_value=None,max_value=None, enums=[]):
+    def __init__(self,name=None, description="", default=0.0, required=False, min_value=None, max_value=None, format="", enums=[]):
         self.default = default
         self.name = name
         self.required = required
@@ -110,6 +110,7 @@ class FloatField(Field):
         self.max_value = max_value
         self.description = description
         self.enums = enums
+        self.format = format
 
     def validate(self, name, value):
         if value is None:
@@ -164,13 +165,13 @@ class BoolField(Field):
         return value
     
 class StringField(Field):
-    def __init__(self,name=None, description="", default='',required=False,min_length=None,max_length=None, regex=None, format="", enums=[]):
+    def __init__(self,name=None, description="", default='',required=False,min_length=None,max_length=None, pattern=None, format="", enums=[]):
         self.default = default
         self.name = name
         self.required = required
         self.min_length = min_length
         self.max_length = max_length
-        self.regex = regex
+        self.pattern = pattern
         self.description = description
         self.enums = enums
         self.format = format
@@ -196,13 +197,13 @@ class StringField(Field):
         if self.max_length is not None and self.max_length < length:
             raise ValueError("{} maximum length should not exceed {} characters".format(name, self.max_length))
         
-        if self.regex is not None:
+        if self.pattern is not None:
             try:
-                m = re.match(self.regex, value)
+                m = re.match(self.pattern, value)
                 if m is None or m.end() < len(value):
-                    raise ValueError('{}: {} is NOT fully matched regex.'.format(name, self.regex))
+                    raise ValueError('{}: {} is NOT fully matched pattern.'.format(name, self.pattern))
             except re.error:
-                raise ValueError('{}: {} is NOT a valid regex.'.format(name, self.regex))
+                raise ValueError('{}: {} is NOT a valid pattern.'.format(name, self.pattern))
             
         self.checkin_enums(name, value)
 
@@ -285,7 +286,7 @@ class ObjectField(Field):
             raise ValueError("{} should be <SchemaModel> type".format(name))
         
 class AnyOfField(Field):
-    def __init__(self,fields, name=None, description="", default=[], required=False, is_to_dict=False):
+    def __init__(self, fields, name=None, description="", default=[], required=False, is_to_dict=False):
         if not isinstance(fields, list):
             raise ValueError("{} should be List type.".format(name))
         self.default = default
@@ -318,8 +319,8 @@ class AnyOfField(Field):
         raise ValueError("{} should be any of {} type.".format(name, ' or '.join([field.__name__ for field in self.fields])))
             
 class AllOfField(Field):
-    def __init__(self,fields, name=None, description="", default=[], required=False, is_to_dict=False):
-        if value is None:
+    def __init__(self, fields, name=None, description="", default=[], required=False, is_to_dict=False):
+        if fields is None:
             if self.required:
                 raise ValueError('"{}" is missing.'.format(name))
             else:
