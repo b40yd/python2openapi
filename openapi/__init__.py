@@ -130,9 +130,13 @@ def _parser_parameter(field):
         if field.max_length:
             schema["maxLength"] = field.max_length
     elif isinstance(field, AnyOfField):
-        schema["type"] = "anyOf"
+        schema["type"] = "array"
+        schema["anyOf"] = []
         for f in field.fields:
-            schema["items"] = _parser_parameter(f)
+             _p = _parser_parameter(f)
+             if _p:
+                _p.pop('type', None)
+                schema["anyOf"].append(_p) 
         return schema
     else:
         if issubclass(field, SchemaBaseModel):
